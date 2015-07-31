@@ -161,11 +161,13 @@ public:
       pos = strpos(username.Get(), "_utf8");
 
       if (pos != NOT_FOUND ) {
-            username.DeleteSub(pos,5);
+        username.DeleteSub(pos,5);
 
-            logText("UTF-8 conversion set for username '%s'\n",username.Get());
+        logText("UTF-8 conversion set for username '%s'\n",username.Get());
 
-            utf8 = true;
+	utf8 = true;
+      } else {
+        utf8 = false;
       }
 
       WDL_String tmp(username.Get());
@@ -215,10 +217,12 @@ public:
       pos = strpos(username.Get(), "_utf8");
 
       if (pos != NOT_FOUND ) {
-            username.DeleteSub(pos,5);
+        username.DeleteSub(pos,5);
+        logText("UTF-8 conversion set for username '%s'\n",username.Get());
 
-            logText("UTF-8 conversion set for username '%s'\n",username.Get());
-            utf8 = true;
+        utf8 = true;
+      } else {
+        utf8 = false;
       }
 
       int x;
