@@ -34,6 +34,8 @@
 
 #include <ctype.h>
 
+#include <iconv.h>
+
 #include "usercon.h"
 #include "../mpb.h"
 
@@ -250,7 +252,9 @@ int User_Connection::OnRunAuth(User_Group *group)
     }
   }
 
+
   m_username.Set(m_lookup->username.Get());
+  m_utf8 = m_lookup->utf8;
   // disconnect any user by the same name
   // in allowmulti mode, append -<idx>
   {
@@ -865,6 +869,37 @@ void User_Group::Broadcast(Net_Message *msg, User_Connection *nosend)
   }
 }
 
+void User_Group::BroadcastChat(mpb_chat_message newmsg, User_Connection *nosend)
+{
+    Net_Message *msg = newmsg.build();
+    newmsg.parms[2] = CodeCharSet(newmsg.parms[2], "WINDOWS-1251","UTF-8");
+    Net_Message *msgUtf8 = newmsg.build();
+
+    if (msg && msgUtf8)
+    {
+        msg->addRef(); // we do this so that if nobody actually gets to send it, we delete it
+        msgUtf8->addRef(); // we do this so that if nobody actually gets to send it, we delete it
+
+        int x;
+        for (x = 0; x < m_users.GetSize(); x ++)
+        {
+          User_Connection *p=m_users.Get(x);
+            if (p && p->m_auth_state > 0 && p != nosend && p->m_utf8)
+            {
+                p->Send(msgUtf8);
+            }
+
+            if (p && p->m_auth_state > 0 && p != nosend && !p->m_utf8)
+            {
+                p->Send(msg);
+            }
+        }
+
+    msg->releaseRef();
+    msgUtf8->releaseRef();
+  }
+}
+
 int User_Group::Run()
 {
     int wantsleep=1;
@@ -1132,7 +1167,12 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
       newmsg.parms[0]="MSG";
       newmsg.parms[1]=con->m_username.Get();
       newmsg.parms[2]=msg->parms[1];
-      Broadcast(newmsg.build());
+
+      if (con->m_utf8) {
+          newmsg.parms[2] = CodeCharSet(newmsg.parms[2], "UTF-8", "WINDOWS-1251");
+      }
+
+      BroadcastChat(newmsg);
     }
     int x;
     for (x = 0; x < need_bcast.GetSize(); x ++)
@@ -1171,6 +1211,17 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
           newmsg.parms[0]="PRIVMSG";
           newmsg.parms[1]=con->m_username.Get();
           newmsg.parms[2]=msg->parms[2];
+
+          if (con->m_utf8 && con->m_utf8 != m_users.Get(x)->m_utf8)
+          {
+              newmsg.parms[2] = CodeCharSet(newmsg.parms[2], "UTF-8","WINDOWS-1251");
+
+          }
+          else if (!con->m_utf8 && con->m_utf8 != m_users.Get(x)->m_utf8)
+          {
+              newmsg.parms[2] = CodeCharSet(newmsg.parms[2], "WINDOWS-1251","UTF-8");
+          }
+
           m_users.Get(x)->Send(newmsg.build());
 
           return;
@@ -1362,4 +1413,23 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
   else // unknown message
   {
   }
+}
+
+
+char *CodeCharSet(char *in, const char *in_set, const char *out_set)
+{
+    iconv_t cd;
+    size_t in_l = strlen(in)+1;
+    size_t out_l = in_l*2;
+    char* out_buff = (char*)malloc(out_l*sizeof(char));
+    char* out = out_buff;
+    memset(out, 0, out_l);
+    cd = iconv_open(out_set, in_set);
+    if (cd != (iconv_t)-1)
+    {
+        iconv(cd, &in, &in_l, &out, &out_l);
+        iconv_close(cd);
+    }
+    else memcpy(out_buff,in,in_l);
+    return out_buff;
 }

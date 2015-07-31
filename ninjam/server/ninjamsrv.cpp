@@ -38,6 +38,7 @@
 #endif
 #include <signal.h>
 #include <stdarg.h>
+#include <string.h>
 
 #include "../../WDL/jnetlib/jnetlib.h"
 #include "../../WDL/jnetlib/httpget.h"
@@ -52,6 +53,7 @@
 #include "../../WDL/string.h"
 
 #define VERSION "v0.06"
+#define NOT_FOUND -1
 
 const char *startupmessage="NINJAM Server " VERSION " built on " __DATE__ " at " __TIME__ " starting up...\n" "Copyright (C) 2005-2007, Cockos, Inc.\n";
 
@@ -65,6 +67,7 @@ User_Group *m_group;
 JNL_Listen *m_listener;
 void onConfigChange(int argc, char **argv);
 void logText(char *s, ...);
+int strpos(char *haystack, char *needle);
 
 class UserPassEntry
 {
@@ -153,6 +156,18 @@ public:
       user_valid=1;
       reqpass=0;
 
+      // check username, if it's like User_utf8 - set flag
+      int pos = NOT_FOUND;
+      pos = strpos(username.Get(), "_utf8");
+
+      if (pos != NOT_FOUND ) {
+            username.DeleteSub(pos,5);
+
+            logText("UTF-8 conversion set for username '%s'\n",username.Get());
+
+            utf8 = true;
+      }
+
       WDL_String tmp(username.Get());
 
       if (tmp.Get()[9] == ':' && tmp.Get()[10])
@@ -173,7 +188,6 @@ public:
         }
       }
       else username.Set("anon");
-
       username.Append("@");
       username.Append(hostmask.Get());
 
@@ -194,6 +208,19 @@ public:
     }
     else
     {
+      WDL_String shaUsername = username;
+
+      // check username, if it's like User_utf8 - set flag
+      int pos = NOT_FOUND;
+      pos = strpos(username.Get(), "_utf8");
+
+      if (pos != NOT_FOUND ) {
+            username.DeleteSub(pos,5);
+
+            logText("UTF-8 conversion set for username '%s'\n",username.Get());
+            utf8 = true;
+      }
+
       int x;
       logText("got login request for '%s'\n",username.Get());
       if (g_status_user.Get()[0] && !strcmp(username.Get(),g_status_user.Get()))
@@ -205,7 +232,7 @@ public:
         max_channels=0;
 
         WDL_SHA1 shatmp;
-        shatmp.add(username.Get(),strlen(username.Get()));
+        shatmp.add(shaUsername.Get(),strlen(shaUsername.Get()));
         shatmp.add(":",1);
         shatmp.add(g_status_pass.Get(),strlen(g_status_pass.Get()));
 
@@ -220,7 +247,7 @@ public:
 
           char *pass=g_userlist.Get(x)->pass.Get();
           WDL_SHA1 shatmp;
-          shatmp.add(username.Get(),strlen(username.Get()));
+          shatmp.add(shaUsername.Get(),strlen(shaUsername.Get()));
           shatmp.add(":",1);
           shatmp.add(pass,strlen(pass));
 
@@ -1031,3 +1058,11 @@ void onConfigChange(int argc, char **argv)
 
 }
 
+
+int strpos(char *haystack, char *needle)
+{
+   char *p = strstr(haystack, needle);
+   if (p)
+      return p - haystack;
+   return NOT_FOUND;
+}

@@ -58,6 +58,8 @@
 #define MIN_BPM 40
 #define MIN_BPI 2
 
+char *CodeCharSet(char *in, const char *in_set, const char *out_set);
+
 class IUserInfoLookup // abstract base class, overridden by server
 {
 public:
@@ -72,6 +74,7 @@ public:
   int max_channels;
   int is_status;
   unsigned char sha1buf_user[WDL_SHA1SIZE];
+  bool utf8;
 
   WDL_String hostmask;
   WDL_String username; // can modify this to change the username
@@ -96,6 +99,7 @@ class User_Group
     void SetLicenseText(char *text) { m_licensetext.Set(text); }
     void Broadcast(Net_Message *msg, User_Connection *nosend=0);
 
+    void BroadcastChat(mpb_chat_message msg, User_Connection *nosend=0);
 
     void SetLogDir(char *path); // NULL to not log
 
@@ -203,6 +207,8 @@ class User_Connection
     Net_Connection m_netcon;
     WDL_String m_username;
     
+    bool m_utf8;
+
     // auth info
     time_t m_connect_time;
     int m_auth_state;      // 1 if authorized, 0 if not yet, -1 if auth pending
