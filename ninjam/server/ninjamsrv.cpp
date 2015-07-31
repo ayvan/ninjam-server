@@ -55,6 +55,8 @@
 #define VERSION "v0.06"
 #define NOT_FOUND -1
 
+#define wsprintf sprintf
+
 const char *startupmessage="NINJAM Server " VERSION " built on " __DATE__ " at " __TIME__ " starting up...\n" "Copyright (C) 2005-2007, Cockos, Inc.\n";
 
 int g_set_uid=-1;
@@ -188,6 +190,7 @@ public:
         }
       }
       else username.Set("anon");
+
       username.Append("@");
       username.Append(hostmask.Get());
 
@@ -389,7 +392,7 @@ static int ConfigOnToken(LineParser *lp)
   {
     if (lp->getnumtokens() != 3) return -1;
     int suc=0;
-    char *v=lp->gettoken_str(1);
+    char *v=(char *)lp->gettoken_str(1);
     char *t=strstr(v,"/");
     if (t)
     {
@@ -427,7 +430,7 @@ static int ConfigOnToken(LineParser *lp)
     p->pass.Set(lp->gettoken_str(2));
     if (lp->getnumtokens()>3)
     {
-      char *ptr=lp->gettoken_str(3);
+      char *ptr=(char *)lp->gettoken_str(3);
       while (*ptr)
       {
         if (*ptr == '*') p->priv_flag|=~PRIV_HIDDEN; // everything but hidden if * used
@@ -515,7 +518,6 @@ static int ConfigOnToken(LineParser *lp)
 
 static int ReadConfig(char *configfile)
 {
-  bool comment_state=0;
   int linecnt=0;
   WDL_String linebuild;
   if (g_logfp) logText("[config] reloading configuration file\n");
@@ -559,7 +561,7 @@ static int ReadConfig(char *configfile)
     if (!buf[0]) break;
     if (buf[strlen(buf)-1]=='\n') buf[strlen(buf)-1]=0;
 
-    LineParser lp(comment_state);
+    LineParser lp(false);
 
     if (buf[0] && buf[strlen(buf)-1]=='\\')
     {
@@ -588,7 +590,6 @@ static int ReadConfig(char *configfile)
     }
     else
     {
-      comment_state = lp.InCommentBlock();
 
       if (lp.getnumtokens()>0)
       {
@@ -811,7 +812,7 @@ int main(int argc, char **argv)
 #endif
     while (!g_done)
     {
-      JNL_Connection *con=m_listener->get_connect(2*65536,65536);
+      JNL_IConnection *con=m_listener->get_connect(2*65536,65536);
       if (con) 
       {
         char str[512];
