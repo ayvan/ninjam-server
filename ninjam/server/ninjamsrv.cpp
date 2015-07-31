@@ -68,7 +68,7 @@ WDL_String g_status_pass,g_status_user;
 User_Group *m_group;
 JNL_Listen *m_listener;
 void onConfigChange(int argc, char **argv);
-void logText(char *s, ...);
+void logText(const char *s, ...);
 int strpos(char *haystack, char *needle);
 
 class UserPassEntry
@@ -160,7 +160,7 @@ public:
 
       // check username, if it's like User_utf8 - set flag
       int pos = NOT_FOUND;
-      pos = strpos(username.Get(), "_utf8");
+      pos = strpos(username.Get(), (char *)"_utf8");
 
       if (pos != NOT_FOUND ) {
             username.DeleteSub(pos,5);
@@ -215,7 +215,7 @@ public:
 
       // check username, if it's like User_utf8 - set flag
       int pos = NOT_FOUND;
-      pos = strpos(username.Get(), "_utf8");
+      pos = strpos(username.Get(), (char *)"_utf8");
 
       if (pos != NOT_FOUND ) {
             username.DeleteSub(pos,5);
@@ -674,7 +674,7 @@ void usage()
     exit(1);
 }
 
-void logText(char *s, ...)
+void logText(const char *s, ...)
 {
     if (g_logfp) 
     {      
