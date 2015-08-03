@@ -1,54 +1,36 @@
 /*
     WDL - lineparse.h
-    Copyright (C) 2005 Cockos Incorporated
+    Copyright (C) 2005-2014 Cockos Incorporated
     Copyright (C) 1999-2004 Nullsoft, Inc. 
+  
+    This software is provided 'as-is', without any express or implied
+    warranty.  In no event will the authors be held liable for any damages
+    arising from the use of this software.
 
-    WDL is dual-licensed. You may modify and/or distribute WDL under either of 
-    the following  licenses:
-    
-      This software is provided 'as-is', without any express or implied
-      warranty.  In no event will the authors be held liable for any damages
-      arising from the use of this software.
+    Permission is granted to anyone to use this software for any purpose,
+    including commercial applications, and to alter it and redistribute it
+    freely, subject to the following restrictions:
 
-      Permission is granted to anyone to use this software for any purpose,
-      including commercial applications, and to alter it and redistribute it
-      freely, subject to the following restrictions:
-
-      1. The origin of this software must not be misrepresented; you must not
-         claim that you wrote the original software. If you use this software
-         in a product, an acknowledgment in the product documentation would be
-         appreciated but is not required.
-      2. Altered source versions must be plainly marked as such, and must not be
-         misrepresented as being the original software.
-      3. This notice may not be removed or altered from any source distribution.
+    1. The origin of this software must not be misrepresented; you must not
+       claim that you wrote the original software. If you use this software
+       in a product, an acknowledgment in the product documentation would be
+       appreciated but is not required.
+    2. Altered source versions must be plainly marked as such, and must not be
+       misrepresented as being the original software.
+    3. This notice may not be removed or altered from any source distribution.
       
-
-    or:
-
-      WDL is free software; you can redistribute it and/or modify
-      it under the terms of the GNU General Public License as published by
-      the Free Software Foundation; either version 2 of the License, or
-      (at your option) any later version.
-
-      WDL is distributed in the hope that it will be useful,
-      but WITHOUT ANY WARRANTY; without even the implied warranty of
-      MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-      GNU General Public License for more details.
-
-      You should have received a copy of the GNU General Public License
-      along with WDL; if not, write to the Free Software
-      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
 /*
 
-  This file provides a simple line parsing class. This class is also used in NSIS,
-  http://nsis.sf.net. In particular, it allows for multiple space delimited tokens 
+  This file provides a simple line parsing class. This class was derived from that of NSIS,
+  http://nsis.sf.net, but it is no longer compatible (escaped-encodings and multiline C-style comments
+  are ignored). 
+  
+  In particular, it allows for multiple space delimited tokens 
   on a line, with a choice of three quotes (`bla`, 'bla', or "bla") to contain any 
   items that may have spaces.
-
-  For a bigger reference on the format, you can refer to NSIS's documentation.
-  
+ 
 */
 
 #ifndef WDL_LINEPARSE_H_
@@ -56,53 +38,62 @@
 
 
 #ifndef WDL_LINEPARSE_IMPL_ONLY
-class LineParser {
+class LineParser 
+{
   public:
+    int getnumtokens() const { return (m_nt-m_eat)>=0 ? (m_nt-m_eat) : 0; }
+    int parse(const char *line) { return parse_ex(line,false); } // <0 on error, old style (;# starting tokens means comment to EOL)
 
-    LineParser(bool bCommentBlock)
+    #ifdef WDL_LINEPARSE_INTF_ONLY
+      int parse_ex(const char *line, bool withcomments = true); // <0 on error, withcomments = true means don't treat #; as comments
+
+      double gettoken_float(int token, int *success=NULL) const;
+      int gettoken_int(int token, int *success=NULL) const;
+      unsigned int gettoken_uint(int token, int *success=NULL) const;
+      const char *gettoken_str(int token) const;
+      int gettoken_enum(int token, const char *strlist) const; // null seperated list
+
+      void set_one_token(const char *ptr);
+    #endif
+
+    void eattoken() { m_eat++; }
+
+
+    LineParser(bool ignoredLegacyValue=false)
     {
-      m_bCommentBlock=bCommentBlock;
       m_nt=m_eat=0;
       m_tokens=0;
+      m_tmpbuf_used=0;
     }
     
     ~LineParser()
     {
       freetokens();
     }
-    
-    bool InCommentBlock()
-    {
-      return m_bCommentBlock;
-    }
-    int getnumtokens() { return m_nt-m_eat; }
 
-    void eattoken() { m_eat++; }
+#endif // !WDL_LINEPARSE_IMPL_ONLY
 
-#define WDL_LINEPARSE_PREFIX 
-#else
-#define WDL_LINEPARSE_PREFIX LineParser::
-#endif
+
     
-    int WDL_LINEPARSE_PREFIX parse(const char *line, int ignore_escaping
-#ifdef WDL_LINEPARSE_INTF_ONLY
-      =1); // returns -1 on error
-#else
-#ifdef WDL_LINEPARSE_IMPL_ONLY
-    )
-#else
-    =1)
-#endif
+#ifndef WDL_LINEPARSE_INTF_ONLY
+   #ifdef WDL_LINEPARSE_IMPL_ONLY
+     #define WDL_LINEPARSE_PREFIX LineParser::
+     #define WDL_LINEPARSE_DEFPARM(x)
+   #else
+     #define WDL_LINEPARSE_PREFIX
+     #define WDL_LINEPARSE_DEFPARM(x) =(x)
+   #endif
+
+    int WDL_LINEPARSE_PREFIX parse_ex(const char *line, bool withcomments WDL_LINEPARSE_DEFPARM(true))
     {
       freetokens();
-      bool bPrevCB=m_bCommentBlock;
-      int n=doline(line, ignore_escaping);
-      if (n) return n;
+      int n=doline(line, withcomments);
+      if (n) { m_nt=0; return n; }
       if (m_nt) 
       {
-        m_bCommentBlock=bPrevCB;
-        m_tokens=(char**)malloc(sizeof(char*)*m_nt);
-        n=doline(line, ignore_escaping);
+        m_tokens=(char**)tmpbufalloc(sizeof(char*)*m_nt);
+        if (m_tokens) memset(m_tokens,0,m_nt * sizeof(char*));
+        n=doline(line, withcomments);
         if (n) 
         {
           freetokens();
@@ -111,52 +102,48 @@ class LineParser {
       }
       return 0;
     }
-#endif
 
 
-    double WDL_LINEPARSE_PREFIX gettoken_float(int token, int *success
-#ifdef WDL_LINEPARSE_INTF_ONLY
-      =0);
-#else
+    void WDL_LINEPARSE_PREFIX set_one_token(const char *ptr)
+    { 
+      freetokens();
+      m_eat=0;
+      m_nt=1;
+      m_tokens=(char **)tmpbufalloc(sizeof(char *));
+      m_tokens[0]=tmpbufalloc(strlen(ptr)+1);
+      if (m_tokens[0]) strcpy(m_tokens[0],ptr);
+    }
 
-#ifdef WDL_LINEPARSE_IMPL_ONLY
-    )
-#else
-    =0)
-#endif
+    double WDL_LINEPARSE_PREFIX gettoken_float(int token, int *success WDL_LINEPARSE_DEFPARM(NULL)) const
     {
       token+=m_eat;
-      if (token < 0 || token >= m_nt) 
+      if (token < 0 || token >= m_nt || !m_tokens || !m_tokens[token]) 
       {
         if (success) *success=0;
         return 0.0;
       }
+      const char *t=m_tokens[token];
       if (success)
-      {
-        char *t=m_tokens[token];
         *success=*t?1:0;
-        while (*t) 
-        {
-          if ((*t < '0' || *t > '9')&&*t != '.') *success=0;
-          t++;
-        }
-      }
-      return atof(m_tokens[token]);
-    }
-#endif
 
-    int WDL_LINEPARSE_PREFIX gettoken_int(int token, int *success
-#ifdef WDL_LINEPARSE_INTF_ONLY
-      =0) ;
-#else
-#ifdef WDL_LINEPARSE_IMPL_ONLY
-    )
-#else
-    =0)
-#endif
+      // todo: detect d or f prefix for double/float base64 encodings
+      char buf[512];
+      int ot = 0;
+      while (*t&&ot<(int)sizeof(buf)-1) 
+      {
+        char c=*t++;
+        if (c == ',') c = '.';
+        else if (success && (c < '0' || c > '9') && c != '.') *success=0;
+        buf[ot++]=c;
+      }
+      buf[ot] = 0;
+      return atof(buf);
+    }
+
+    int WDL_LINEPARSE_PREFIX gettoken_int(int token, int *success WDL_LINEPARSE_DEFPARM(NULL)) const
     { 
       token+=m_eat;
-      if (token < 0 || token >= m_nt || !m_tokens[token][0]) 
+      if (token < 0 || token >= m_nt || !m_tokens || !m_tokens[token] || !m_tokens[token][0]) 
       {
         if (success) *success=0;
         return 0;
@@ -168,24 +155,34 @@ class LineParser {
       if (success) *success=! (int)(*tmp);
       return l;
     }
-#endif
-    char * WDL_LINEPARSE_PREFIX gettoken_str(int token) 
-#ifdef WDL_LINEPARSE_INTF_ONLY
-      ;
-#else
+
+    unsigned int WDL_LINEPARSE_PREFIX gettoken_uint(int token, int *success WDL_LINEPARSE_DEFPARM(NULL)) const
     { 
       token+=m_eat;
-      if (token < 0 || token >= m_nt) return "";
+      if (token < 0 || token >= m_nt || !m_tokens || !m_tokens[token] || !m_tokens[token][0]) 
+      {
+        if (success) *success=0;
+        return 0;
+      }
+      char *tmp;      
+      const char* p=m_tokens[token];
+      if (p[0] == '-') ++p;
+      unsigned int val=(int)strtoul(p, &tmp, 0);
+      if (success) *success=! (int)(*tmp);
+      return val;
+    }
+
+    const char * WDL_LINEPARSE_PREFIX gettoken_str(int token) const
+    { 
+      token+=m_eat;
+      if (token < 0 || token >= m_nt || !m_tokens || !m_tokens[token]) return "";
       return m_tokens[token]; 
     }
-#endif
-    int WDL_LINEPARSE_PREFIX gettoken_enum(int token, const char *strlist) // null seperated list
-#ifdef WDL_LINEPARSE_INTF_ONLY
-      ;
-#else
+
+    int WDL_LINEPARSE_PREFIX gettoken_enum(int token, const char *strlist) const // null seperated list
     {
       int x=0;
-      char *tt=gettoken_str(token);
+      const char *tt=gettoken_str(token);
       if (tt && *tt) while (*strlist)
       {
 #ifdef _WIN32
@@ -198,58 +195,32 @@ class LineParser {
       }
       return -1;
     }
-#endif
 
 #ifndef WDL_LINEPARSE_IMPL_ONLY
   private:
-#endif//!WDL_LINEPARSE_IMPL_ONLY
+#endif
+
     void WDL_LINEPARSE_PREFIX freetokens()
-#ifdef WDL_LINEPARSE_INTF_ONLY
-      ;
-#else
     {
       if (m_tokens)
       {
         int x;
-        for (x = 0; x < m_nt; x ++)
-          free(m_tokens[x]);
-        free(m_tokens);
+        for (x = 0; x < m_nt; x ++) tmpbuffree(m_tokens[x]);
+        tmpbuffree((char*)m_tokens);
       }
+      m_tmpbuf_used=0;
       m_tokens=0;
       m_nt=0;
     }
-#endif
 
-    int WDL_LINEPARSE_PREFIX doline(const char *line, int ignore_escaping)
-#ifdef WDL_LINEPARSE_INTF_ONLY
-      ;
-#else
+    int WDL_LINEPARSE_PREFIX doline(const char *line, bool withcomments)
     {
       m_nt=0;
-      if ( m_bCommentBlock )
-      {
-        while ( *line )
-        {
-          if ( *line == '*' && *(line+1) == '/' )
-          {
-            m_bCommentBlock=false; // Found end of comment block
-            line+=2;
-            break;
-          }
-          line++;
-        }
-      }
       while (*line == ' ' || *line == '\t') line++;
       while (*line) 
       {
         int lstate=0; // 1=", 2=`, 4='
-        if (*line == ';' || *line == '#') break;
-        if (*line == '/' && *(line+1) == '*')
-        {
-          m_bCommentBlock = true;
-          line+=2;
-          return doline(line, ignore_escaping);
-        }
+        if (!withcomments && (*line == ';' || *line == '#')) break;
         if (*line == '\"') lstate=1;
         else if (*line == '\'') lstate=2;
         else if (*line == '`') lstate=4;
@@ -258,16 +229,6 @@ class LineParser {
         const char *p = line;
         while (*line)
         {
-          if (line[0] == '$' && line[1] == '\\') {
-            switch (line[2]) {
-              case '"':
-              case '\'':
-              case '`':
-                nc += ignore_escaping ? 3 : 1;
-                line += 3;
-                continue;
-            }
-          }
           if (lstate==1 && *line =='\"') break;
           if (lstate==2 && *line =='\'') break;
           if (lstate==4 && *line =='`') break;
@@ -277,20 +238,12 @@ class LineParser {
         }
         if (m_tokens)
         {
-          int i;
-          m_tokens[m_nt]=(char*)malloc(nc+1);
-          for (i = 0; p < line; i++, p++) {
-            if (!ignore_escaping && p[0] == '$' && p[1] == '\\') {
-              switch (p[2]) {
-                case '"':
-                case '\'':
-                case '`':
-                  p += 2;
-              }
-            }
-            m_tokens[m_nt][i] = *p;
+          m_tokens[m_nt]=tmpbufalloc(nc+1);
+          if (m_tokens[m_nt])
+          {
+            memcpy(m_tokens[m_nt], p, nc);
+            m_tokens[m_nt][nc]=0;
           }
-          m_tokens[m_nt][nc]=0;
         }
         m_nt++;
         if (lstate)
@@ -302,13 +255,41 @@ class LineParser {
       }
       return 0;
     }
-#endif
+
+    char * WDL_LINEPARSE_PREFIX tmpbufalloc(size_t sz)
+    {
+      if (sz<1)sz=1;
+      if (sz+m_tmpbuf_used <= sizeof(m_tmpbuf))
+      {
+         m_tmpbuf_used+=sz;
+         return m_tmpbuf + m_tmpbuf_used - sz;
+      }
+      return (char *)malloc(sz);
+    }
+    void WDL_LINEPARSE_PREFIX tmpbuffree(char *p)
+    {
+      if (p < m_tmpbuf || p >= m_tmpbuf + sizeof(m_tmpbuf)) free(p);
+    }
+
+   #undef WDL_LINEPARSE_PREFIX
+   #undef WDL_LINEPARSE_DEFPARM
+#endif // ! WDL_LINEPARSE_INTF_ONLY
     
 #ifndef WDL_LINEPARSE_IMPL_ONLY
+  private:
+
+#ifdef WDL_LINEPARSE_INTF_ONLY
+    void freetokens();
+    int doline(const char *line, bool withcomments);
+    char *tmpbufalloc(size_t sz);
+    void tmpbuffree(char *p);
+#endif
+
+    size_t m_tmpbuf_used;
+    char **m_tokens;
     int m_eat;
     int m_nt;
-    bool m_bCommentBlock;
-    char **m_tokens;
+    char m_tmpbuf[2048];
 };
 #endif//!WDL_LINEPARSE_IMPL_ONLY
 #endif//WDL_LINEPARSE_H_

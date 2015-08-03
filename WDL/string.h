@@ -176,7 +176,7 @@ public:
   char *Get()
   {
     if (m_hb.Get()) return (char *)m_hb.Get();
-    return "";
+    return (char *)"";
   }
 
   private:

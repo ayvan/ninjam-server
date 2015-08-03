@@ -47,6 +47,8 @@
 #define strncasecmp strnicmp
 #endif
 
+#define wsprintf sprintf
+
 static void guidtostr(unsigned char *guid, char *str)
 {
   int x;
@@ -92,13 +94,13 @@ static void type_to_string(unsigned int t, char *out)
 
 
 
-extern void logText(char *s, ...);
+extern void logText(const char *s, ...);
 
 #define MAX_NICK_LEN 128 // not including null term
 
 #define TRANSFER_TIMEOUT 8
 
-User_Connection::User_Connection(JNL_Connection *con, User_Group *grp) : m_auth_state(0), m_clientcaps(0), m_auth_privs(0), m_reserved(0), m_max_channels(0),
+User_Connection::User_Connection(JNL_IConnection *con, User_Group *grp) : m_auth_state(0), m_clientcaps(0), m_auth_privs(0), m_reserved(0), m_max_channels(0),
       m_vote_bpm(0), m_vote_bpm_lasttime(0), m_vote_bpi(0), m_vote_bpi_lasttime(0)
 {
   m_netcon.attach(con);
@@ -187,7 +189,7 @@ int User_Connection::OnRunAuth(User_Group *group)
     {
       logText("%s: Refusing user, invalid login/password\n",addrbuf);
       mpb_server_auth_reply bh;
-      bh.errmsg="invalid login/password";
+      bh.errmsg=(char *)"invalid login/password";
       Send(bh.build());
       return 0;
     }
@@ -206,8 +208,8 @@ int User_Connection::OnRunAuth(User_Group *group)
 
     {
       mpb_chat_message newmsg;
-      newmsg.parms[0]="TOPIC";
-      newmsg.parms[1]="";
+      newmsg.parms[0]=(char *)"TOPIC";
+      newmsg.parms[1]=(char *)"";
       newmsg.parms[2]=group->m_topictext.Get();
       Send(newmsg.build());
     }
@@ -226,7 +228,7 @@ int User_Connection::OnRunAuth(User_Group *group)
       sprintf(buf2,"%d",group->m_max_users);
 
       mpb_chat_message newmsg;
-      newmsg.parms[0]="USERCOUNT";
+      newmsg.parms[0]=(char *)"USERCOUNT";
       newmsg.parms[1]=buf;;
       newmsg.parms[2]=buf2;
       Send(newmsg.build());
@@ -251,7 +253,6 @@ int User_Connection::OnRunAuth(User_Group *group)
       if (!--l) *p=0;
     }
   }
-
 
   m_username.Set(m_lookup->username.Get());
   m_utf8 = m_lookup->utf8;
@@ -303,7 +304,7 @@ int User_Connection::OnRunAuth(User_Group *group)
       logText("%s: Refusing user %s, server full\n",addrbuf,m_username.Get());
       // sorry, gotta kill this connection
       mpb_server_auth_reply bh;
-      bh.errmsg="server full";
+      bh.errmsg=(char *)"server full";
       Send(bh.build());
       return 0;
     }
@@ -336,14 +337,14 @@ int User_Connection::OnRunAuth(User_Group *group)
 
   {
     mpb_chat_message newmsg;
-    newmsg.parms[0]="TOPIC";
-    newmsg.parms[1]="";
+    newmsg.parms[0]=(char *)"TOPIC";
+    newmsg.parms[1]=(char *)"";
     newmsg.parms[2]=group->m_topictext.Get();
     Send(newmsg.build());
   }
   {
     mpb_chat_message newmsg;
-    newmsg.parms[0]="JOIN";
+    newmsg.parms[0]=(char *)"JOIN";
     newmsg.parms[1]=m_username.Get();
     group->Broadcast(newmsg.build(),this);
   }
@@ -375,7 +376,7 @@ void User_Connection::SendUserList(User_Group *group)
       }
       if (!acnt && !group->m_allow_hidden_users && u->m_max_channels && !(u->m_auth_privs & PRIV_HIDDEN)) // give users at least one channel
       {
-          bh.build_add_rec(1,0,0,0,0,u->m_username.Get(),"");
+          bh.build_add_rec(1,0,0,0,0,u->m_username.Get(),(char *)"");
       }
     }
   }       
@@ -417,7 +418,7 @@ int User_Connection::Run(User_Group *group, int *wantsleep)
         logText("%s: Got an authorization timeout\n",buf);
         m_connect_time=time(NULL)+120;
         mpb_server_auth_reply bh;
-        bh.errmsg="authorization timeout";
+        bh.errmsg=(char *)"authorization timeout";
         Send(bh.build());
         m_netcon.Run();
 
@@ -440,7 +441,7 @@ int User_Connection::Run(User_Group *group, int *wantsleep)
 
     if (err_st)
     {
-      static char *tab[] = { "invalid authorization reply", "incorrect client version", "license not agreed to" };
+      static char *tab[] = { (char *)"invalid authorization reply", (char *)"incorrect client version", (char *)"license not agreed to" };
       mpb_server_auth_reply bh;
       bh.errmsg=tab[err_st-1];
 
@@ -500,7 +501,7 @@ int User_Connection::Run(User_Group *group, int *wantsleep)
             char *chnp=0;
             while ((offs=chi.parse_get_rec(offs,&chnp,&v,&p,&f))>0 && whichch < MAX_USER_CHANNELS && whichch < m_max_channels)
             {
-              if (!chnp) chnp=""; 
+              if (!chnp) chnp=(char *)"";
 
               int doactive=!(f&0x80);
 
@@ -555,7 +556,7 @@ int User_Connection::Run(User_Group *group, int *wantsleep)
 
               if (whichch == MAX_USER_CHANNELS) // if empty, tell the user about one channel
               {
-                mfmt.build_add_rec(1,0,0,0,0,m_username.Get(),"");
+                mfmt.build_add_rec(1,0,0,0,0,m_username.Get(),(char *)"");
                 mfmt_changes++;
               }
             }
@@ -651,7 +652,7 @@ int User_Connection::Run(User_Group *group, int *wantsleep)
                 if (group->m_logfp)
                 {
                   // decide when to write new interval
-                  char *chn="?";
+                  char *chn=(char *)"?";
                   if (mp.chidx >= 0 && mp.chidx < MAX_USER_CHANNELS) chn=m_channels[mp.chidx].name.Get();
                   fprintf(group->m_logfp,"user %s \"%s\" %d \"%s\"\n",guidstr,myusername,mp.chidx,chn);
                 }
@@ -951,7 +952,7 @@ int User_Group::Run()
           if (p->m_auth_state>0) 
           {
             mpb_chat_message newmsg;
-            newmsg.parms[0]="PART";
+            newmsg.parms[0]=(char *)"PART";
             newmsg.parms[1]=p->m_username.Get();
             Broadcast(newmsg.build(),p);
 
@@ -1006,7 +1007,7 @@ void User_Group::SetConfig(int bpi, int bpm)
   Broadcast(mk.build());
 }
 
-void User_Group::AddConnection(JNL_Connection *con, int isres)
+void User_Group::AddConnection(JNL_IConnection *con, int isres)
 {
   User_Connection *p=new User_Connection(con,this);
   if (isres) p->m_reserved=1;
@@ -1023,8 +1024,8 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
       if (!(con->m_auth_privs & PRIV_VOTE) || m_voting_threshold > 100 || m_voting_threshold < 1)
       {
         mpb_chat_message newmsg;
-        newmsg.parms[0]="MSG";
-        newmsg.parms[1]="";
+        newmsg.parms[0]=(char *)"MSG";
+        newmsg.parms[1]=(char *)"";
         newmsg.parms[2]=(char *)(m_voting_threshold > 100 || m_voting_threshold < 1? "[voting system] Voting not enabled" : "[voting system] No vote permission");
         con->Send(newmsg.build());
         return;
@@ -1049,9 +1050,9 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
       else
       {
         mpb_chat_message newmsg;
-        newmsg.parms[0]="MSG";
-        newmsg.parms[1]="";
-        newmsg.parms[2]="[voting system] !vote requires <bpm|bpi> <value> parameters";
+        newmsg.parms[0]=(char *)"MSG";
+        newmsg.parms[1]=(char *)"";
+        newmsg.parms[2]=(char *)"[voting system] !vote requires <bpm|bpi> <value> parameters";
         con->Send(newmsg.build());
         return;
       }
@@ -1089,8 +1090,8 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
             sprintf(buf,"[voting system] setting BPM to %d",m_last_bpm);
 
             mpb_chat_message newmsg;
-            newmsg.parms[0]="MSG";
-            newmsg.parms[1]="";
+            newmsg.parms[0]=(char *)"MSG";
+            newmsg.parms[1]=(char *)"";
             newmsg.parms[2]=buf;
             need_bcast.Add(newmsg.build());
 
@@ -1109,8 +1110,8 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
             sprintf(buf,"[voting system] leading candidate: %d/%d votes for %d BPM [each vote expires in %ds]",bpms[maxbpm],(vucnt * m_voting_threshold + 50)/100,maxbpm+MIN_BPM,m_voting_timeout);
 
             mpb_chat_message newmsg;
-            newmsg.parms[0]="MSG";
-            newmsg.parms[1]="";
+            newmsg.parms[0]=(char *)"MSG";
+            newmsg.parms[1]=(char *)"";
             newmsg.parms[2]=buf;
             need_bcast.Add(newmsg.build());
           }
@@ -1124,8 +1125,8 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
             sprintf(buf,"[voting system] setting BPI to %d",m_last_bpi);
 
             mpb_chat_message newmsg;
-            newmsg.parms[0]="MSG";
-            newmsg.parms[1]="";
+            newmsg.parms[0]=(char *)"MSG";
+            newmsg.parms[1]=(char *)"";
             newmsg.parms[2]=buf;
             need_bcast.Add(newmsg.build());
 
@@ -1142,8 +1143,8 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
             sprintf(buf,"[voting system] leading candidate: %d/%d votes for %d BPI [each vote expires in %ds]",bpis[maxbpi],(vucnt * m_voting_threshold + 50)/100,maxbpi+MIN_BPI,m_voting_timeout);
 
             mpb_chat_message newmsg;
-            newmsg.parms[0]="MSG";
-            newmsg.parms[1]="";
+            newmsg.parms[0]=(char *)"MSG";
+            newmsg.parms[1]=(char *)"";
             newmsg.parms[2]=buf;
             need_bcast.Add(newmsg.build());
           }
@@ -1156,15 +1157,15 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
     if (!(con->m_auth_privs & PRIV_CHATSEND))
     {
       mpb_chat_message newmsg;
-      newmsg.parms[0]="MSG";
-      newmsg.parms[1]="";
-      newmsg.parms[2]="No MSG permission";
+      newmsg.parms[0]=(char *)"MSG";
+      newmsg.parms[1]=(char *)"";
+      newmsg.parms[2]=(char *)"No MSG permission";
       con->Send(newmsg.build());
     }
     else if (msg->parms[1] && *msg->parms[1])
     {
       mpb_chat_message newmsg;
-      newmsg.parms[0]="MSG";
+      newmsg.parms[0]=(char *)"MSG";
       newmsg.parms[1]=con->m_username.Get();
       newmsg.parms[2]=msg->parms[1];
 
@@ -1182,7 +1183,7 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
   else if (!strcmp(msg->parms[0],"SESSION")) // session block descriptor message
   {
     mpb_chat_message newmsg;
-    newmsg.parms[0]="SESSION";
+    newmsg.parms[0]=(char *)"SESSION";
     newmsg.parms[1]=con->m_username.Get();
     newmsg.parms[2]=msg->parms[1]; // guid
     newmsg.parms[3]=msg->parms[2]; // index
@@ -1194,9 +1195,9 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
     if (!(con->m_auth_privs & PRIV_CHATSEND))
     {
       mpb_chat_message newmsg;
-      newmsg.parms[0]="MSG";
-      newmsg.parms[1]="";
-      newmsg.parms[2]="No PRIVMSG permission";
+      newmsg.parms[0]=(char *)"MSG";
+      newmsg.parms[1]=(char *)"";
+      newmsg.parms[2]=(char *)"No PRIVMSG permission";
       con->Send(newmsg.build());
     }
     else if (msg->parms[1] && *msg->parms[1] && msg->parms[2] && *msg->parms[2])
@@ -1208,7 +1209,7 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
         if (!strcasecmp(msg->parms[1],m_users.Get(x)->m_username.Get()))
         {
           mpb_chat_message newmsg;
-          newmsg.parms[0]="PRIVMSG";
+          newmsg.parms[0]=(char *)"PRIVMSG";
           newmsg.parms[1]=con->m_username.Get();
           newmsg.parms[2]=msg->parms[2];
 
@@ -1232,15 +1233,15 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
       WDL_String buf("No such user: ");
       buf.Append(msg->parms[1]);          
       mpb_chat_message newmsg;
-      newmsg.parms[0]="MSG";
-      newmsg.parms[1]="";
+      newmsg.parms[0]=(char *)"MSG";
+      newmsg.parms[1]=(char *)"";
       newmsg.parms[2]=buf.Get();
       con->Send(newmsg.build());
     }
   }
   else if (!strcmp(msg->parms[0],"ADMIN")) // admin message
   {
-    char *adminerr="ADMIN requires valid parameter, i.e. topic, kick, bpm, bpi";
+    char *adminerr=(char *)"ADMIN requires valid parameter, i.e. topic, kick, bpm, bpi";
     if (msg->parms[1] && *msg->parms[1])
     {
       if (!strncasecmp(msg->parms[1],"topic ",6))
@@ -1248,9 +1249,9 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
         if (!(con->m_auth_privs & PRIV_TOPIC))
         {
           mpb_chat_message newmsg;
-          newmsg.parms[0]="MSG";
-          newmsg.parms[1]="";
-          newmsg.parms[2]="No TOPIC permission";
+          newmsg.parms[0]=(char *)"MSG";
+          newmsg.parms[1]=(char *)"";
+          newmsg.parms[2]=(char *)"No TOPIC permission";
           con->Send(newmsg.build());
         }
         else
@@ -1262,7 +1263,7 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
           {
             m_topictext.Set(p);
             mpb_chat_message newmsg;
-            newmsg.parms[0]="TOPIC";
+            newmsg.parms[0]=(char *)"TOPIC";
             newmsg.parms[1]=con->m_username.Get();
             newmsg.parms[2]=m_topictext.Get();
             Broadcast(newmsg.build());
@@ -1275,9 +1276,9 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
         if (!(con->m_auth_privs & PRIV_KICK))
         {
           mpb_chat_message newmsg;
-          newmsg.parms[0]="MSG";
-          newmsg.parms[1]="";
-          newmsg.parms[2]="No KICK permission";
+          newmsg.parms[0]=(char *)"MSG";
+          newmsg.parms[1]=(char *)"";
+          newmsg.parms[2]=(char *)"No KICK permission";
           con->Send(newmsg.build());
         }
         else
@@ -1304,8 +1305,8 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
                   buf.Append(con->m_username.Get());
 
                   mpb_chat_message newmsg;
-                  newmsg.parms[0]="MSG";
-                  newmsg.parms[1]="";
+                  newmsg.parms[0]=(char *)"MSG";
+                  newmsg.parms[1]=(char *)"";
                   newmsg.parms[2]=buf.Get();
                   Broadcast(newmsg.build());
 
@@ -1322,8 +1323,8 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
               tmp.Append("\" not found!\n");
 
               mpb_chat_message newmsg;
-              newmsg.parms[0]="MSG";
-              newmsg.parms[1]="";
+              newmsg.parms[0]=(char *)"MSG";
+              newmsg.parms[1]=(char *)"";
               newmsg.parms[2]=tmp.Get();
               con->Send(newmsg.build());
             }
@@ -1337,9 +1338,9 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
         if (!(con->m_auth_privs & PRIV_BPM))
         {
           mpb_chat_message newmsg;
-          newmsg.parms[0]="MSG";
-          newmsg.parms[1]="";
-          newmsg.parms[2]="No BPM/BPI permission";
+          newmsg.parms[0]=(char *)"MSG";
+          newmsg.parms[1]=(char *)"";
+          newmsg.parms[2]=(char *)"No BPM/BPI permission";
           con->Send(newmsg.build());
         }
         else
@@ -1352,17 +1353,17 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
           if (isbpm && (v < 20 || v > 400))
           {
             mpb_chat_message newmsg;
-            newmsg.parms[0]="MSG";
-            newmsg.parms[1]="";
-            newmsg.parms[2]="BPM parameter must be between 20 and 400";
+            newmsg.parms[0]=(char *)"MSG";
+            newmsg.parms[1]=(char *)"";
+            newmsg.parms[2]=(char *)"BPM parameter must be between 20 and 400";
             con->Send(newmsg.build());
           }
           else if (!isbpm && (v < 2 || v > 1024))
           {
             mpb_chat_message newmsg;
-            newmsg.parms[0]="MSG";
-            newmsg.parms[1]="";
-            newmsg.parms[2]="BPI parameter must be between 2 and 1024";
+            newmsg.parms[0]=(char *)"MSG";
+            newmsg.parms[1]=(char *)"";
+            newmsg.parms[2]=(char *)"BPI parameter must be between 2 and 1024";
             con->Send(newmsg.build());
           }
           else
@@ -1384,8 +1385,8 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
             str.Append(buf);
 
             mpb_chat_message newmsg;
-            newmsg.parms[0]="MSG";
-            newmsg.parms[1]="";
+            newmsg.parms[0]=(char *)"MSG";
+            newmsg.parms[1]=(char *)"";
             newmsg.parms[2]=str.Get();
             Broadcast(newmsg.build());
           }
@@ -1395,8 +1396,8 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
       else
       {
         mpb_chat_message newmsg;
-        newmsg.parms[0]="MSG";
-        newmsg.parms[1]="";
+        newmsg.parms[0]=(char *)"MSG";
+        newmsg.parms[1]=(char *)"";
         newmsg.parms[2]=adminerr;
         con->Send(newmsg.build());
       }
@@ -1404,8 +1405,8 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
     else
     {
       mpb_chat_message newmsg;
-      newmsg.parms[0]="MSG";
-      newmsg.parms[1]="";
+      newmsg.parms[0]=(char *)"MSG";
+      newmsg.parms[1]=(char *)"";
       newmsg.parms[2]=adminerr;
       con->Send(newmsg.build());
     }

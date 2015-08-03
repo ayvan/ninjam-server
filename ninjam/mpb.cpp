@@ -880,7 +880,7 @@ Net_Message *mpb_chat_message::build()
   for (x = 0; x < sizeof(parms)/sizeof(parms[0]); x ++)
   {
     char *sp=parms[x];
-    if (!sp) sp="";
+    if (!sp) sp=(char *)"";
     strcpy(p,sp);
     p+=strlen(sp)+1;
   }
