@@ -9,7 +9,7 @@ http://www.cockos.com/ninjam/
 
 # New feature
 
-Added support for charset conversion between Mac OS X client and server to support WINDOWS-1251 (russian language) chat.
+Added support for charset conversion between Mac OS X client and server to support windows charset (for example, CP1251 for russian language) in Mac OS X client chat. See WindowsCharset parameter in config.
 
 To use chat in Mac OS X client  just add "_utf8" to your username when login to turn on UTF-8 conversion. You username in chat will be without "_utf8" and you don't need register new user in config, postfix will be cut after login.
 

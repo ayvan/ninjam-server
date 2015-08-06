@@ -97,6 +97,7 @@ class User_Group
     int Run(); // return 1 if safe to sleep
     void SetConfig(int bpi, int bpm);
     void SetLicenseText(char *text) { m_licensetext.Set(text); }
+    void SetCharset(char *text) { m_charset.Set(text); }
     void Broadcast(Net_Message *msg, User_Connection *nosend=0);
 
     void BroadcastChat(mpb_chat_message msg, User_Connection *nosend=0);
@@ -129,6 +130,8 @@ class User_Group
 
     WDL_String m_licensetext;
     WDL_String m_topictext;
+
+    WDL_String m_charset;
 
     WDL_String m_logdir;
     FILE *m_logfp;

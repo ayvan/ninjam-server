@@ -873,7 +873,7 @@ void User_Group::Broadcast(Net_Message *msg, User_Connection *nosend)
 void User_Group::BroadcastChat(mpb_chat_message newmsg, User_Connection *nosend)
 {
     Net_Message *msg = newmsg.build();
-    newmsg.parms[2] = CodeCharSet(newmsg.parms[2], "WINDOWS-1251","UTF-8");
+    newmsg.parms[2] = CodeCharSet(newmsg.parms[2], m_charset.Get(),"UTF-8");
     Net_Message *msgUtf8 = newmsg.build();
 
     if (msg && msgUtf8)
@@ -1170,7 +1170,7 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
       newmsg.parms[2]=msg->parms[1];
 
       if (con->m_utf8) {
-          newmsg.parms[2] = CodeCharSet(newmsg.parms[2], "UTF-8", "WINDOWS-1251");
+          newmsg.parms[2] = CodeCharSet(newmsg.parms[2], "UTF-8", m_charset.Get());
       }
 
       BroadcastChat(newmsg);
@@ -1215,12 +1215,12 @@ void User_Group::onChatMessage(User_Connection *con, mpb_chat_message *msg)
 
           if (con->m_utf8 && con->m_utf8 != m_users.Get(x)->m_utf8)
           {
-              newmsg.parms[2] = CodeCharSet(newmsg.parms[2], "UTF-8","WINDOWS-1251");
+              newmsg.parms[2] = CodeCharSet(newmsg.parms[2], "UTF-8", m_charset.Get());
 
           }
           else if (!con->m_utf8 && con->m_utf8 != m_users.Get(x)->m_utf8)
           {
-              newmsg.parms[2] = CodeCharSet(newmsg.parms[2], "WINDOWS-1251","UTF-8");
+              newmsg.parms[2] = CodeCharSet(newmsg.parms[2], m_charset.Get(),"UTF-8");
           }
 
           m_users.Get(x)->Send(newmsg.build());

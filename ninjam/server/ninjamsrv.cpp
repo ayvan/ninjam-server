@@ -129,6 +129,8 @@ int g_config_maxch_user;
 WDL_String g_config_logpath;
 int g_config_log_sessionlen;
 
+WDL_String g_config_charset;
+
 time_t next_session_update_time;
 
 WDL_String g_config_license;
@@ -318,6 +320,11 @@ static int ConfigOnToken(LineParser *lp)
     if (lp->getnumtokens() != 3) return -1;
     g_config_logpath.Set(lp->gettoken_str(1));    
     g_config_log_sessionlen = lp->gettoken_int(2);
+  }
+  else if (!stricmp(t,"WindowsCharset"))
+  {
+    if (lp->getnumtokens() != 2) return -1;
+    g_config_charset.Set(lp->gettoken_str(1));
   }
   else if (!stricmp(t,"SetUID"))
   {
@@ -543,6 +550,7 @@ static int ReadConfig(char *configfile)
   g_config_maxch_user=32;
   g_default_bpi=8;
   g_default_bpm=120;
+  g_config_charset.Set("WINDOWS-1251");
 
   g_config_log_sessionlen=10; // ten minute default, tho the user will need to specify the path anyway
 
@@ -796,7 +804,8 @@ int main(int argc, char **argv)
   JNL::open_socketlib();
 
   {
-    logText("Port: %d\n",g_config_port);    
+    logText("Port: %d\n",g_config_port);
+    logText("Charset: %s\n", g_config_charset.Get());
     m_listener = new JNL_Listen(g_config_port);
     if (m_listener->is_error()) 
     {
@@ -806,7 +815,9 @@ int main(int argc, char **argv)
     m_group->CreateUserLookup=myCreateUserLookup;
 
     logText("Using defaults %d BPM %d BPI\n",g_default_bpm,g_default_bpi);
-    m_group->SetConfig(g_default_bpi,g_default_bpm);    
+    m_group->SetConfig(g_default_bpi,g_default_bpm);
+
+    m_group->SetCharset(g_config_charset.Get());
 
     m_group->SetLicenseText(g_config_license.Get());
 
